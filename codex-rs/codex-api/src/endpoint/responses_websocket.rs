@@ -782,7 +782,10 @@ async fn send_websocket_request(
     telemetry: Option<&Arc<dyn WebsocketTelemetry>>,
     connection_reused: bool,
 ) -> Result<(), ApiError> {
-    trace!("websocket request: {request_text}");
+    trace!(bytes = request_text.len(), "websocket request sent");
+    if std::env::var("CODEX_LOG_RAW_PAYLOADS").is_ok() {
+        trace!("websocket request payload: {request_text}");
+    }
 
     let request_start = Instant::now();
     let result = tokio::time::timeout(
