@@ -51,29 +51,11 @@ const LOG_BATCH_SIZE: usize = 128;
 const LOG_FLUSH_INTERVAL: Duration = Duration::from_secs(2);
 
 pub fn default_filter() -> Targets {
-    let default_level = std::env::var("CODEX_LOG_LEVEL")
-        .ok()
-        .and_then(|level| level.parse::<LevelFilter>().ok())
-        .unwrap_or(LevelFilter::WARN);
     Targets::new()
-        .with_default(default_level)
-        // Telemetry-only targets: these exist only to be mirrored to OTEL
-        // exporters and should never land in the local feedback log.
+        .with_default(LevelFilter::TRACE)
+        .with_target("log", LevelFilter::OFF)
         .with_target("codex_otel.log_only", LevelFilter::OFF)
         .with_target("codex_otel.trace_safe", LevelFilter::OFF)
-        // Crates that emit through the `log` compatibility layer (e.g.
-        // `notify` inotify events) are high-frequency and low-value for
-        // local debugging.
-        .with_target("log", LevelFilter::OFF)
-        // Low-level OpenTelemetry SDK internals are not user-actionable.
-        .with_target("opentelemetry_sdk", LevelFilter::OFF)
-        .with_target("opentelemetry_appender_tracing", LevelFilter::OFF)
-        // HTTP/TLS/WebSocket internals: keep warnings/errors but drop the
-        // routine connection-pool and framing chatter.
-        .with_target("hyper_util", LevelFilter::WARN)
-        .with_target("tokio_tungstenite", LevelFilter::WARN)
-        .with_target("h2", LevelFilter::WARN)
-        .with_target("tower", LevelFilter::WARN)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -217,12 +199,24 @@ where
 
     fn on_event(&self, event: &Event<'_>, ctx: tracing_subscriber::layer::Context<'_, S>) {
         let metadata = event.metadata();
-        // `tracing-log` compatibility events are tagged with target "log" but
-        // may bypass the `Targets` filter's callsite caching. Drop them here as
-        // a hard guard regardless of filter configuration.
+        // `tracing-log` checks filters with the original log target before
+        // dispatching an event whose tracing target is `log`, so the outer
+        // target filter cannot reliably reject these bridged events.
         if metadata.target() == "log" {
             return;
         }
+
+        // The SDK emits DEBUG timer meta-events every second per process; these
+        // were over 30% of retained logs in measured high-fanout Codex environments.
+        if metadata.target() == "opentelemetry_sdk"
+            && matches!(
+                *metadata.level(),
+                tracing::Level::TRACE | tracing::Level::DEBUG
+            )
+        {
+            return;
+        }
+
         let mut visitor = MessageVisitor::default();
         event.record(&mut visitor);
         let thread_id = visitor
