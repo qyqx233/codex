@@ -7,7 +7,7 @@ use uuid::Uuid;
 use super::*;
 
 #[tokio::test]
-async fn sqlite_sink_filters_noisy_targets_without_dropping_useful_diagnostics() {
+async fn sqlite_sink_suppresses_noisy_targets() {
     let codex_home =
         std::env::temp_dir().join(format!("codex-state-log-db-filter-{}", Uuid::new_v4()));
     let _cleanup = scopeguard::guard(codex_home.clone(), |codex_home| {
@@ -27,11 +27,11 @@ async fn sqlite_sink_filters_noisy_targets_without_dropping_useful_diagnostics()
 
     tracing::trace!(target: "opentelemetry_sdk", "dropped-trace");
     tracing::debug!(target: "opentelemetry_sdk", "dropped-debug");
-    tracing::info!(target: "opentelemetry_sdk", "retained-info");
+    tracing::info!(target: "opentelemetry_sdk", "dropped-info");
     tracing::warn!(target: "sqlx::query", "dropped-slow-query-warning");
     tracing::warn!(target: "sqlx::pool::acquire", "dropped-slow-acquire-warning");
     tracing::warn!(target: "sqlx::other", "dropped-sqlx-warning");
-    tracing::info!(target: "sqlx_application", "retained-unrelated-target");
+    tracing::info!(target: "sqlx_application", "dropped-unrelated-target");
     tracing::debug!(target: "opentelemetry-otlp", "dropped-otlp-export");
     tracing::error!(target: "opentelemetry-http", "dropped-http-export");
     tracing::trace!(target: "h2::proto::streams", "dropped-http2-trace");
@@ -45,28 +45,28 @@ async fn sqlite_sink_filters_noisy_targets_without_dropping_useful_diagnostics()
     tracing::warn!(target: "h2::proto::ping_pong", "retained-http2-ping-warning");
     tracing::warn!(target: "h2::proto::streams", "retained-http2-warning");
     tracing::debug!(target: "rmcp::transport", "dropped-rmcp-debug");
-    tracing::info!(target: "rmcp::transport", "retained-rmcp-info");
+    tracing::info!(target: "rmcp::transport", "dropped-rmcp-info");
     tracing::debug!(
         target: "codex_rmcp_client::oauth",
         "dropped-codex-rmcp-client-debug"
     );
     tracing::info!(
         target: "codex_rmcp_client::oauth",
-        "retained-codex-rmcp-client-info"
+        "dropped-codex-rmcp-client-info"
     );
     tracing::trace!(target: "codex_http_client::transport", "dropped-request-body");
-    tracing::debug!(target: "codex_http_client::transport", "retained-request-diagnostic");
+    tracing::debug!(target: "codex_http_client::transport", "dropped-request-diagnostic");
     tracing::trace!(target: "codex_api::sse", "dropped-sse-parent");
     tracing::trace!(target: "codex_api::sse::responses", "dropped-sse-payload");
-    tracing::debug!(target: "codex_api::sse::responses", "retained-sse-diagnostic");
-    tracing::trace!(target: "codex_state", "retained-trace");
+    tracing::debug!(target: "codex_api::sse::responses", "dropped-sse-diagnostic");
+    tracing::trace!(target: "codex_state", "dropped-trace");
     tracing::trace!(
         target: "codex_tui::streaming::controller",
         "dropped-controller-trace"
     );
     tracing::debug!(
         target: "codex_tui::streaming::controller",
-        "retained-controller-debug"
+        "dropped-controller-debug"
     );
     tracing::trace!(
         target: "codex_tui::streaming::table_holdback",
@@ -74,11 +74,11 @@ async fn sqlite_sink_filters_noisy_targets_without_dropping_useful_diagnostics()
     );
     tracing::debug!(
         target: "codex_tui::streaming::table_holdback",
-        "retained-table-holdback-debug"
+        "dropped-table-holdback-debug"
     );
     tracing::trace!(
         target: "codex_tui::streaming::commit_tick",
-        "retained-commit-tick-trace"
+        "dropped-commit-tick-trace"
     );
     tracing::trace!(
         target: "codex_api::responses_websocket_timing",
@@ -102,50 +102,12 @@ async fn sqlite_sink_filters_noisy_targets_without_dropping_useful_diagnostics()
             ))
             .collect::<Vec<_>>(),
         vec![
-            ("INFO", "opentelemetry_sdk", Some("retained-info")),
-            (
-                "INFO",
-                "sqlx_application",
-                Some("retained-unrelated-target")
-            ),
             (
                 "WARN",
                 "h2::proto::ping_pong",
                 Some("retained-http2-ping-warning")
             ),
             ("WARN", "h2::proto::streams", Some("retained-http2-warning")),
-            ("INFO", "rmcp::transport", Some("retained-rmcp-info")),
-            (
-                "INFO",
-                "codex_rmcp_client::oauth",
-                Some("retained-codex-rmcp-client-info")
-            ),
-            (
-                "DEBUG",
-                "codex_http_client::transport",
-                Some("retained-request-diagnostic")
-            ),
-            (
-                "DEBUG",
-                "codex_api::sse::responses",
-                Some("retained-sse-diagnostic")
-            ),
-            ("TRACE", "codex_state", Some("retained-trace")),
-            (
-                "DEBUG",
-                "codex_tui::streaming::controller",
-                Some("retained-controller-debug"),
-            ),
-            (
-                "DEBUG",
-                "codex_tui::streaming::table_holdback",
-                Some("retained-table-holdback-debug"),
-            ),
-            (
-                "TRACE",
-                "codex_tui::streaming::commit_tick",
-                Some("retained-commit-tick-trace"),
-            ),
         ]
     );
 }

@@ -55,30 +55,32 @@ const LOG_FLUSH_INTERVAL: Duration = Duration::from_secs(10);
 const SQLX_LOG_TARGETS: [&str; 3] = ["sqlx", "sqlx_core", "sqlx_sqlite"];
 
 pub fn default_filter() -> Targets {
+    let default_level = std::env::var("CODEX_LOG_LEVEL")
+        .ok()
+        .and_then(|level| level.parse::<LevelFilter>().ok())
+        .unwrap_or(LevelFilter::WARN);
+
     Targets::new()
-        .with_default(LevelFilter::TRACE)
+        .with_default(default_level)
         .with_target("h2", LevelFilter::WARN)
         .with_target("hyper_util", LevelFilter::WARN)
         .with_target("log", LevelFilter::OFF)
         // Avoid constructing backend diagnostics when no other layer needs them.
         .with_targets(SQLX_LOG_TARGETS.map(|target| (format!("{target}::"), LevelFilter::OFF)))
-        .with_target("codex_rmcp_client", LevelFilter::INFO)
+        .with_target("codex_rmcp_client", LevelFilter::WARN)
         .with_target("opentelemetry-otlp", LevelFilter::OFF)
         .with_target("opentelemetry-http", LevelFilter::OFF)
         .with_target("tonic::transport", LevelFilter::WARN)
         .with_target("tower::buffer", LevelFilter::WARN)
         .with_target("codex_otel.log_only", LevelFilter::OFF)
         .with_target("codex_otel.trace_safe", LevelFilter::OFF)
-        .with_target("rmcp", LevelFilter::INFO)
+        .with_target("opentelemetry_sdk", LevelFilter::OFF)
+        .with_target("opentelemetry_appender_tracing", LevelFilter::OFF)
+        .with_target("tokio_tungstenite", LevelFilter::WARN)
+        .with_target("tower", LevelFilter::WARN)
+        .with_target("rmcp", LevelFilter::WARN)
         .with_target("codex_api::responses_websocket_timing", LevelFilter::OFF)
         .with_target("codex_core::post_sampling_token_estimate", LevelFilter::OFF)
-        // Full model request bodies and streamed response payloads overwhelm the
-        // SQLite log database, but remain available to explicit TRACE subscribers.
-        .with_target("codex_http_client::transport", LevelFilter::DEBUG)
-        .with_target("codex_api::sse", LevelFilter::DEBUG)
-        // Per-chunk streaming traces otherwise flood the bounded SQLite log queue.
-        .with_target("codex_tui::streaming::controller", LevelFilter::DEBUG)
-        .with_target("codex_tui::streaming::table_holdback", LevelFilter::DEBUG)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

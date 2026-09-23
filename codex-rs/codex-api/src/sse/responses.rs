@@ -615,8 +615,6 @@ async fn process_sse_with_treatment(
             }
         };
 
-        trace!("SSE event: {}", &sse.data);
-
         let event: ResponsesStreamEvent = match serde_json::from_str(&sse.data) {
             Ok(event) => event,
             Err(e) => {
@@ -627,9 +625,16 @@ async fn process_sse_with_treatment(
                     payload_bytes = sse.data.len(),
                     "Failed to parse SSE event"
                 );
+                if std::env::var("CODEX_LOG_RAW_PAYLOADS").is_ok() {
+                    debug!("SSE event payload: {}", &sse.data);
+                }
                 continue;
             }
         };
+        trace!(kind = %event.kind, bytes = sse.data.len(), "SSE event received");
+        if std::env::var("CODEX_LOG_RAW_PAYLOADS").is_ok() {
+            trace!("SSE event payload: {}", &sse.data);
+        }
         let model_verifications = event.model_verifications();
         let turn_moderation_metadata = event.turn_moderation_metadata();
         let safety_buffering = event.safety_buffering(&safety_buffering_treatment);
